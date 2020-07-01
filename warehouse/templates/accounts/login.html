@@ -87,10 +87,17 @@
               <div>
                 <input type="submit" value="{% trans %}Log in{% endtrans %}" class="button button--primary">
               </div>
+              <div>
               <label for="show-password">
                 <input data-action="change->password#togglePasswords" data-target="password.showPassword"
                   id="show-password" type="checkbox">&nbsp;{% trans %}Show password{% endtrans %}
               </label>
+              <br>
+              <label for="persistent-login">
+                  <input data-action="change->password#togglePasswords" data-target="password.showPassword"
+                    id="persistent-login" type="checkbox">&nbsp;{% trans %}Keep me logged in{% endtrans %}
+              </label>
+              </div>
             </div>
             <span>
               <a href="{{request.route_url('accounts.request-password-reset')}}">{% trans %}Forgot password?{% endtrans %}</a>
