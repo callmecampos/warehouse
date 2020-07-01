@@ -1,0 +1,24 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+      - name: Run linting
+        uses: ./.github/actions/docker
+        with:
+          entrypoint: make lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+      - name: Run the tests
+        uses: ./github/actions/docker
+        with:
+          entrypoint: bin/tests --postgresql-host ${ 127.0.0.1 }
