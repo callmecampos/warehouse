@@ -1,0 +1,51 @@
+name: CI
+
+on: [push, pull_request]
+
+env:
+  CACHE_IMAGE: fmrcampos/docker-ci-cache
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v1
+      - name: Log in to docker hub
+        run: echo ${{ secrets.REGISTRY_PASS }} | docker login -u ${{ secrets.REGISTRY_USER }} --password-stdin
+      - name: Build base from dockerfile
+        run: |
+          docker build \
+            --target static \
+            --cache-from $CACHE_IMAGE:static \
+            --tag $CACHE_IMAGE:static \
+            --file ./Dockerfile \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            "."
+      - name: Build build from dockerfile
+        run: |
+          docker build \
+            --target build \
+            --cache-from $CACHE_IMAGE:build \
+            --tag $CACHE_IMAGE:build \
+            --file ./Dockerfile \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            "."
+      - name: Build stage from dockerfile
+        run: |
+          docker build \
+            --cache-from $CACHE_IMAGE:static \
+            --cache-from $CACHE_IMAGE:build \
+            --cache-from $CACHE_IMAGE:stage \
+            --tag $CACHE_IMAGE:stage \
+            --file ./Dockerfile \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            "."
+      - name: Push static image to docker hub
+        run: docker push $CACHE_IMAGE:static
+      - name: Push build image to docker hub
+        run: docker push $CACHE_IMAGE:build
+      - name: Push stage image to docker hub
+        run: docker push $CACHE_IMAGE:stage

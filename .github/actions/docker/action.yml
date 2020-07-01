@@ -1,0 +1,5 @@
+name: 'Docker Multi-Layer Caching'
+description: 'Build our Docker image'
+runs:
+  using: 'docker'
+  image: '../../../Dockerfile'
