@@ -49,3 +49,14 @@ jobs:
         run: docker push $CACHE_IMAGE:build
       - name: Push stage image to docker hub
         run: docker push $CACHE_IMAGE:stage
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:stage
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Run the tests
+        run: bin/tests --postgresql-host 127.0.0.1
