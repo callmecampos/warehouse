@@ -3,31 +3,16 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  build_with_gpr: # from https://github.com/dtinth/github-actions-docker-layer-caching-poc
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u $GITHUB_ACTOR --password-stdin
-      - run: docker pull docker.pkg.github.com/$GITHUB_REPOSITORY/build-cache-no-buildkit || true
-      - run: docker build . -t warehouse --cache-from=docker.pkg.github.com/$GITHUB_REPOSITORY/build-cache-no-buildkit
-      - run: docker tag warehouse docker.pkg.github.com/$GITHUB_REPOSITORY/build-cache-no-buildkit && docker push docker.pkg.github.com/$GITHUB_REPOSITORY/build-cache-no-buildkit || true
-  
-  lint:
-    needs: build_with_gpr
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
-      - name: Pull Docker Image
-        run: docker pull docker.pkg.github.com/$GITHUB_REPOSITORY/build-cache-no-buildkit || true
-
   test:
-    needs: build_with_gpr
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
+
+      - uses: satackey/action-docker-layer-caching@v0.0.3
+
+      - name: Build the Docker image
+        run: docker build . --file Dockerfile --tag warehouse-image:latest
+
       - name: Run the tests
-        uses: ./.github/actions/docker
-        with:
-          entrypoint: bin/tests --postgresql-host ${ 127.0.0.1 }
+        run: docker run warehouse-image:latest bin/tests --postgresql-host 127.0.0.1
