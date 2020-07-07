@@ -5,6 +5,7 @@ on: [push, pull_request]
 env:
   CACHE_IMAGE: fmrcampos/docker-ci-cache
   DOCKER_BUILDKIT: 1
+  NODE_VERSION: 14.4.0
 
 jobs:
   build:
@@ -15,7 +16,7 @@ jobs:
         uses: actions/checkout@v1
       - name: Log in to docker hub
         run: echo ${{ secrets.REGISTRY_PASS }} | docker login -u ${{ secrets.REGISTRY_USER }} --password-stdin
-      - name: Build base from dockerfile
+      - name: Build static from dockerfile
         run: |
           docker build \
             --target static \
@@ -28,6 +29,7 @@ jobs:
         run: |
           docker build \
             --target build \
+            --cache-from $CACHE_IMAGE:static \
             --cache-from $CACHE_IMAGE:build \
             --tag $CACHE_IMAGE:build \
             --file ./Dockerfile \
@@ -50,7 +52,7 @@ jobs:
       - name: Push stage image to docker hub
         run: docker push $CACHE_IMAGE:stage
 
-  test:
+  docs:
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -58,5 +60,51 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v2
 
-      - name: Run the tests
+      - name: Documentation
+        run: |
+          apt-get update && apt-get install make
+          make docs
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:stage
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      # Performs a clean installation of all dependencies in the `package.json` file
+      - name: Install dependencies
+        run: |
+          apt-get update && apt-get install make
+          nvm install $NODE_VERSION
+          pip install -U pip setuptools wheel
+          pip install -r requirements.txt
+          pip install -r requirements/dev.txt
+          npm i -g npm
+          npm install -g gulp-cli
+          npm ci
+
+      - name: Connect to PostgreSQL
+        # Runs a script that creates a PostgreSQL client, populates
+        # the client with data, and retrieves data
+        run: node client.js
+        # Environment variable used by the `client.js` script to create a new PostgreSQL client.
+        env:
+          # The hostname used to communicate with the PostgreSQL service container
+          POSTGRES_HOST: postgres
+          # The default PostgreSQL port
+          POSTGRES_PORT: 5432
+
+      - name: Run tests
         run: bin/tests --postgresql-host 127.0.0.1
