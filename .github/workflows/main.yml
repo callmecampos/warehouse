@@ -38,7 +38,6 @@ jobs:
       - name: Build stage from dockerfile
         run: |
           docker build \
-            --cache-from $CACHE_IMAGE:static \
             --cache-from $CACHE_IMAGE:build \
             --cache-from $CACHE_IMAGE:stage \
             --tag $CACHE_IMAGE:stage \
@@ -51,19 +50,6 @@ jobs:
         run: docker push $CACHE_IMAGE:build
       - name: Push stage image to docker hub
         run: docker push $CACHE_IMAGE:stage
-
-  docs:
-    needs: build
-    runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:stage
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
-
-      - name: Documentation
-        run: |
-          apt-get update && apt-get install make
-          make docs
 
   test:
     needs: build
@@ -86,7 +72,12 @@ jobs:
       # Performs a clean installation of all dependencies in the `package.json` file
       - name: Install dependencies
         run: |
-          apt-get update && apt-get install make
+          apt-get update && apt-get -y install make build-essential curl libpq-dev gcc autoconf nodejs
+          apt -y install libcurl4-openssl-dev libssl-dev pkg-config
+          curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.0/install.sh | bash
+          export NVM_DIR="$HOME/.nvm" 
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
           nvm install $NODE_VERSION
           pip install -U pip setuptools wheel
           pip install -r requirements.txt
@@ -108,3 +99,108 @@ jobs:
 
       - name: Run tests
         run: bin/tests --postgresql-host 127.0.0.1
+
+  lint:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:static
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Lint
+        run: |
+          apt-get update && apt-get install make
+          make lint
+
+  docs:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:stage
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Documentation
+        run: |
+          apt-get update && apt-get install make
+          make docs
+  
+  deps:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:stage
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Dependencies
+        run: |
+          apt-get update && apt-get -y install build-essential make curl libpq-dev gcc autoconf
+          apt -y install libcurl4-openssl-dev libssl-dev pkg-config
+          curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.0/install.sh | bash
+          export NVM_DIR="$HOME/.nvm" 
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+          nvm install $NODE_VERSION
+          pip install -U pip setuptools wheel
+          pip install -r requirements.txt
+          pip install -r requirements/dev.txt
+          npm i -g npm
+          npm install -g gulp-cli
+          npm ci
+          make deps
+
+  licenses:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:stage
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Licenses
+        run: |
+          apt-get update && apt-get install make
+          make licenses
+  
+  translations:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:stage
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Translations
+        run: |
+          apt-get update && apt-get install make
+          make translations
+
+  static-tests:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:static
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Static Tests
+        run: |
+          export LC_ALL=en_US.UTF-8
+          export LANG=en_US.UTF-8
+          bin/static_tests
+
+  static-pipeline:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:static
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Static Pipeline
+        run: |
+          export LC_ALL=en_US.UTF-8
+          export LANG=en_US.UTF-8
+          bin/static_pipeline
