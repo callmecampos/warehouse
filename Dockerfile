@@ -35,6 +35,7 @@ RUN set -x \
 COPY warehouse/static/ /opt/warehouse/src/warehouse/static/
 COPY warehouse/admin/static/ /opt/warehouse/src/warehouse/admin/static/
 COPY Gulpfile.babel.js /opt/warehouse/src/
+COPY tests/frontend .sass-lint.yml /opt/warehouse/src/
 
 RUN gulp dist
 

@@ -59,7 +59,7 @@ jobs:
       postgres:
         image: postgres
         env:
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: None
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -69,10 +69,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v2
 
-      # Performs a clean installation of all dependencies in the `package.json` file
       - name: Install dependencies
         run: |
-          apt-get update && apt-get -y install make build-essential curl libpq-dev gcc autoconf nodejs
+          apt-get update && apt-get -y install make build-essential curl libpq-dev gcc autoconf nodejs postgresql-client
           apt -y install libcurl4-openssl-dev libssl-dev pkg-config
           curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.0/install.sh | bash
           export NVM_DIR="$HOME/.nvm" 
@@ -86,32 +85,32 @@ jobs:
           npm install -g gulp-cli
           npm ci
 
-      - name: Connect to PostgreSQL
-        # Runs a script that creates a PostgreSQL client, populates
-        # the client with data, and retrieves data
-        run: node client.js
-        # Environment variable used by the `client.js` script to create a new PostgreSQL client.
+      - name: Connect to PostgreSQL and Run Tests
+        run: bin/tests --postgresql-host postgres
         env:
           # The hostname used to communicate with the PostgreSQL service container
           POSTGRES_HOST: postgres
           # The default PostgreSQL port
           POSTGRES_PORT: 5432
-
-      - name: Run tests
-        run: bin/tests --postgresql-host 127.0.0.1
+          # The postgres password
+          POSTGRES_PASSWORD: postgres
 
   lint:
     needs: build
     runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:static
+    container: fmrcampos/docker-ci-cache:stage
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
 
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.8 # take this out if not needed
+
       - name: Lint
         run: |
           apt-get update && apt-get install make
-          make lint
+          make lint ACTIONS=true
 
   docs:
     needs: build
@@ -187,9 +186,30 @@ jobs:
 
       - name: Static Tests
         run: |
-          export LC_ALL=en_US.UTF-8
-          export LANG=en_US.UTF-8
+          apt-get update && apt-get -y install locales
+          echo "LC_ALL=en_US.UTF-8" >> /etc/environment
+          echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+          echo "LANG=en_US.UTF-8" > /etc/locale.conf
+          locale-gen en_US.UTF-8
+          npm install -g jest
           bin/static_tests
+
+  static-lint:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:static
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.8 # take this out if not needed
+
+      - name: Lint
+        run: |
+          ./node_modules/.bin/eslint 'warehouse/static/js/**' '**.js' 'tests/frontend/**' --ignore-pattern 'warehouse/static/js/vendor/**'
+          ./node_modules/.bin/sass-lint --verbose
 
   static-pipeline:
     needs: build
@@ -201,6 +221,10 @@ jobs:
 
       - name: Static Pipeline
         run: |
-          export LC_ALL=en_US.UTF-8
-          export LANG=en_US.UTF-8
+          apt-get update && apt-get -y install locales
+          echo "LC_ALL=en_US.UTF-8" >> /etc/environment
+          echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+          echo "LANG=en_US.UTF-8" > /etc/locale.conf
+          locale-gen en_US.UTF-8
+          npm install -g jest
           bin/static_pipeline
