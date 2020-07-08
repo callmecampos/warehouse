@@ -2,6 +2,7 @@ BINDIR = $(PWD)/.state/env/bin
 TRAVIS := $(shell echo "$${TRAVIS:-false}")
 PR := $(shell echo "$${TRAVIS_PULL_REQUEST:-false}")
 BRANCH := $(shell echo "$${TRAVIS_BRANCH:-master}")
+ACTIONS := false
 DB := example
 IPYTHON := no
 LOCALES := $(shell .state/env/bin/python -c "from warehouse.i18n import KNOWN_LOCALES; print(' '.join(set(KNOWN_LOCALES)-{'en'}))")
@@ -111,12 +112,12 @@ lint: .state/env/pyvenv.cfg
 	# TODO: Figure out a solution to https://github.com/deezer/template-remover/issues/1
 	#       so we can remove extra_whitespace from below.
 	$(BINDIR)/html_lint.py --printfilename --disable=optional_tag,names,protocol,extra_whitespace,concerns_separation,boolean_attribute `find ./warehouse/templates -path ./warehouse/templates/legacy -prune -o -name '*.html' -print`
-ifneq ($(TRAVIS), true)
+ifneq ($(TRAVIS), false)
 	# We're on Travis, so we can lint static files locally
 	./node_modules/.bin/eslint 'warehouse/static/js/**' '**.js' 'tests/frontend/**' --ignore-pattern 'warehouse/static/js/vendor/**'
 	./node_modules/.bin/sass-lint --verbose
-else
-	# We're not on Travis, so we should lint static files inside the static container
+else ifneq ($(ACTIONS), true)
+	# We're not on Travis or GitHub Actions, so we should lint static files inside the static container
 	docker-compose run --rm static ./node_modules/.bin/eslint 'warehouse/static/js/**' '**.js' 'tests/frontend/**' --ignore-pattern 'warehouse/static/js/vendor/**'
 	docker-compose run --rm static ./node_modules/.bin/sass-lint --verbose
 endif
