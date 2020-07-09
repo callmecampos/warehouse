@@ -52,6 +52,7 @@ jobs:
         run: docker push $CACHE_IMAGE:stage
 
   test:
+    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -59,7 +60,7 @@ jobs:
       postgres:
         image: postgres
         env:
-          POSTGRES_PASSWORD: None
+          POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -86,7 +87,10 @@ jobs:
           npm ci
 
       - name: Connect to PostgreSQL and Run Tests
-        run: bin/tests --postgresql-host postgres
+        run: |
+          python -m coverage run -m pytest --strict --postgresql-host postgres --postgresql-password postgres
+          python -m coverage html
+          python -m coverage report -m --fail-under 100
         env:
           # The hostname used to communicate with the PostgreSQL service container
           POSTGRES_HOST: postgres
@@ -96,6 +100,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
 
   lint:
+    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -105,7 +110,7 @@ jobs:
 
       - uses: actions/setup-python@v2
         with:
-          python-version: 3.8 # take this out if not needed
+          python-version: 3.8
 
       - name: Lint
         run: |
@@ -113,6 +118,7 @@ jobs:
           make lint ACTIONS=true
 
   docs:
+    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -126,6 +132,7 @@ jobs:
           make docs
   
   deps:
+    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -151,6 +158,7 @@ jobs:
           make deps
 
   licenses:
+    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -164,6 +172,7 @@ jobs:
           make licenses
   
   translations:
+    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -191,9 +200,11 @@ jobs:
           echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
           echo "LANG=en_US.UTF-8" > /etc/locale.conf
           locale-gen en_US.UTF-8
+          npm install -D babel
           bin/static_tests
 
   static-lint:
+    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:static
@@ -201,12 +212,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v2
 
-      - uses: actions/setup-python@v2
-        with:
-          python-version: 3.8 # take this out if not needed
-
       - name: Lint
         run: |
+          npm install eslint --save-dev
           ./node_modules/.bin/eslint 'warehouse/static/js/**' '**.js' 'tests/frontend/**' --ignore-pattern 'warehouse/static/js/vendor/**'
           ./node_modules/.bin/sass-lint --verbose
 
@@ -225,4 +233,5 @@ jobs:
           echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
           echo "LANG=en_US.UTF-8" > /etc/locale.conf
           locale-gen en_US.UTF-8
+          npm install -D babel
           bin/static_pipeline
