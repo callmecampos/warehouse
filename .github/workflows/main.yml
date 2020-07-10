@@ -50,28 +50,14 @@ jobs:
         run: docker push $CACHE_IMAGE:build
       - name: Push stage image to docker hub
         run: docker push $CACHE_IMAGE:stage
-
-  compose-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
-
-      - name: Run tests
-        run: |
-          apt-get update && apt-get -y install make
-          make tests ACTIONS=true
   
   test:
-    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
     services:
       postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
+        image: postgres:10.1
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -101,18 +87,18 @@ jobs:
           npm install -g gulp-cli
           npm ci
 
-      - name: Run tests and PostreSQL service container
+      - name: Run tests and PostgreSQL service container
         run: |
-          python -m coverage run -m pytest --strict --postgresql-host postgres --postgresql-password postgres
+          python -m coverage run -m pytest --strict --postgresql-host postgres
           python -m coverage html
           python -m coverage report -m --fail-under 100
+          # TODO: use bin/tests
+          # TRYME: warehouse/migrations/versions/b75709859292_add_ondelete_cascade_for_description_.py:27: in upgrade \n op.drop_constraint(
         env:
           # The hostname used to communicate with the PostgreSQL service container
           POSTGRES_HOST: postgres
           # The default PostgreSQL port
           POSTGRES_PORT: 5432
-          # The postgres password
-          POSTGRES_PASSWORD: postgres
 
   lint:
     needs: build
@@ -181,9 +167,23 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Translations
-        run:
+        run: |
           apt-get update && apt-get -y install make
           make translations
+
+  static-lint:
+    needs: build
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:static
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Lint
+        run: |
+          npm install eslint --save-dev
+          ./node_modules/.bin/eslint 'warehouse/static/js/**' '**.js' 'tests/frontend/**' --ignore-pattern 'warehouse/static/js/vendor/**'
+          ./node_modules/.bin/sass-lint --verbose
 
   static-tests:
     needs: build
@@ -202,20 +202,6 @@ jobs:
           locale-gen en_US.UTF-8
           npm install -D babel
           bin/static_tests
-
-  static-lint:
-    needs: build
-    runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:static
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
-
-      - name: Lint
-        run: |
-          npm install eslint --save-dev
-          ./node_modules/.bin/eslint 'warehouse/static/js/**' '**.js' 'tests/frontend/**' --ignore-pattern 'warehouse/static/js/vendor/**'
-          ./node_modules/.bin/sass-lint --verbose
 
   static-pipeline:
     needs: build
