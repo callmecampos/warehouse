@@ -100,7 +100,6 @@ jobs:
           POSTGRES_PASSWORD: postgres
 
   lint:
-    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -118,7 +117,6 @@ jobs:
           make lint ACTIONS=true
 
   docs:
-    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -132,7 +130,6 @@ jobs:
           make docs
   
   deps:
-    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -158,7 +155,6 @@ jobs:
           make deps
 
   licenses:
-    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -172,7 +168,6 @@ jobs:
           make licenses
   
   translations:
-    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -204,7 +199,6 @@ jobs:
           bin/static_tests
 
   static-lint:
-    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:static
