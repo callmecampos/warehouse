@@ -65,10 +65,17 @@ ifeq ($(IPYTHON),"yes")
 endif
 
 .state/docker-build: Dockerfile package.json package-lock.json requirements/main.txt requirements/deploy.txt
+ifneq ($(ACTIONS), false)
+	# Build our docker containers for this project.
+	docker-compose build --build-arg IPYTHON=$(IPYTHON) --build-arg BUILDKIT_INLINE_CACHE=1 --force-rm web
+	docker-compose build --build-arg BUILDKIT_INLINE_CACHE=1 --force-rm worker
+	docker-compose build --build-arg BUILDKIT_INLINE_CACHE=1 --force-rm static
+else
 	# Build our docker containers for this project.
 	docker-compose build --build-arg IPYTHON=$(IPYTHON) --force-rm web
 	docker-compose build --force-rm worker
 	docker-compose build --force-rm static
+endif
 
 	# Mark the state so we don't rebuild this needlessly.
 	mkdir -p .state

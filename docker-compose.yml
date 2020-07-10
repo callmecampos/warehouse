@@ -1,4 +1,4 @@
-version: '3'
+version: '3.7'
 
 volumes:
   packages:
@@ -42,6 +42,10 @@ services:
   web:
     build:
       context: .
+      cache_from:
+        - fmrcampos/docker-ci-cache:static
+        - fmrcampos/docker-ci-cache:build
+        - fmrcampos/docker-ci-cache:stage
       args:
         DEVEL: "yes"
         IPYTHON: "no"
