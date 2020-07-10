@@ -52,7 +52,6 @@ jobs:
         run: docker push $CACHE_IMAGE:stage
 
   test:
-    if: false
     needs: build
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
@@ -72,7 +71,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt-get update && apt-get -y install make build-essential curl libpq-dev gcc autoconf nodejs postgresql-client
+          apt-get update && apt-get -y install make build-essential curl libpq-dev autoconf nodejs postgresql-client
           apt -y install libcurl4-openssl-dev libssl-dev pkg-config
           curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.0/install.sh | bash
           export NVM_DIR="$HOME/.nvm" 
@@ -86,7 +85,7 @@ jobs:
           npm install -g gulp-cli
           npm ci
 
-      - name: Connect to PostgreSQL and Run Tests
+      - name: Run tests and PostreSQL service container
         run: |
           python -m coverage run -m pytest --strict --postgresql-host postgres --postgresql-password postgres
           python -m coverage html
@@ -139,19 +138,11 @@ jobs:
 
       - name: Dependencies
         run: |
-          apt-get update && apt-get -y install build-essential make curl libpq-dev gcc autoconf
+          apt-get update && apt-get -y install build-essential make libpq-dev
           apt -y install libcurl4-openssl-dev libssl-dev pkg-config
-          curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.0/install.sh | bash
-          export NVM_DIR="$HOME/.nvm" 
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-          [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-          nvm install $NODE_VERSION
           pip install -U pip setuptools wheel
           pip install -r requirements.txt
           pip install -r requirements/dev.txt
-          npm i -g npm
-          npm install -g gulp-cli
-          npm ci
           make deps
 
   licenses:
