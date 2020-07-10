@@ -4,12 +4,13 @@ on: [push, pull_request]
 
 env:
   CACHE_IMAGE: fmrcampos/docker-ci-cache
+  GPR_CACHE_IMAGE: docker.pkg.github.com/${{ github.repository }}/docker-ci-cache
   DOCKER_BUILDKIT: 1
   NODE_VERSION: 14.4.0
 
 jobs:
   build:
-    name: Build Docker Image
+    name: DockerHub Cache
     runs-on: ubuntu-latest
     steps:
       - name: Checkout master
@@ -44,11 +45,11 @@ jobs:
             --file ./Dockerfile \
             --build-arg BUILDKIT_INLINE_CACHE=1 \
             "."
-      - name: Push static image to docker hub
+      - name: Push static image to Docker Hub
         run: docker push $CACHE_IMAGE:static
-      - name: Push build image to docker hub
+      - name: Push build image to Docker Hub
         run: docker push $CACHE_IMAGE:build
-      - name: Push stage image to docker hub
+      - name: Push stage image to Docker Hub
         run: docker push $CACHE_IMAGE:stage
   
   test:
@@ -69,12 +70,18 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt-get update && apt-get -y install make locales build-essential curl libpq-dev autoconf nodejs postgresql-client
+          apt-get update && apt-get -y install make locales build-essential curl libpq-dev autoconf
           apt -y install libcurl4-openssl-dev libssl-dev pkg-config
+
+      - name: Set locale
+        run: |
           echo "LC_ALL=en_US.UTF-8" >> /etc/environment
           echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
           echo "LANG=en_US.UTF-8" > /etc/locale.conf
           locale-gen en_US.UTF-8
+
+      - name: Setup tests
+        run: |
           curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.0/install.sh | bash
           export NVM_DIR="$HOME/.nvm" 
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
@@ -87,13 +94,12 @@ jobs:
           npm install -g gulp-cli
           npm ci
 
-      - name: Run tests and PostgreSQL service container
+      - name: Run tests
         run: |
           python -m coverage run -m pytest --strict --postgresql-host postgres
           python -m coverage html
           python -m coverage report -m --fail-under 100
           # TODO: use bin/tests
-          # TRYME: warehouse/migrations/versions/b75709859292_add_ondelete_cascade_for_description_.py:27: in upgrade \n op.drop_constraint(
         env:
           # The hostname used to communicate with the PostgreSQL service container
           POSTGRES_HOST: postgres
@@ -211,7 +217,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v2
 
-      - name: Static Pipeline
+      - name: Locale & Dependency Setup
         run: |
           apt-get update && apt-get -y install locales
           echo "LC_ALL=en_US.UTF-8" >> /etc/environment
@@ -219,4 +225,6 @@ jobs:
           echo "LANG=en_US.UTF-8" > /etc/locale.conf
           locale-gen en_US.UTF-8
           npm install -D babel
-          bin/static_pipeline
+
+      - name: Static Pipeline
+        run: bin/static_pipeline || bin/static_pipeline || bin/static_pipeline
