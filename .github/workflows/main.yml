@@ -10,7 +10,7 @@ env:
 
 jobs:
   build:
-    name: DockerHub Cache
+    name: Docker Hub Cache
     runs-on: ubuntu-latest
     steps:
       - name: Checkout master
@@ -51,6 +51,54 @@ jobs:
         run: docker push $CACHE_IMAGE:build
       - name: Push stage image to Docker Hub
         run: docker push $CACHE_IMAGE:stage
+
+  build-gpr:
+    if: false # https://github.community/t/docker-pull-from-public-github-package-registry-fail-with-no-basic-auth-credentials-error/16358
+    name: GitHub Package Registry Cache
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v1
+      - name: Log in to GitHub Package Registry
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u $GITHUB_ACTOR --password-stdin
+      - name: Build static image from Dockerfile
+        run: |
+          docker pull $GPR_CACHE_IMAGE:static || true
+          docker build \
+            --target static \
+            --cache-from $GPR_CACHE_IMAGE:static \
+            --tag $GPR_CACHE_IMAGE:static \
+            --file ./Dockerfile \
+            # can't use BuildKit for GPR
+            "."
+      - name: Build build image from Dockerfile
+        run: |
+          docker pull $GPR_CACHE_IMAGE:build || true
+          docker build \
+            --target build \
+            --cache-from $GPR_CACHE_IMAGE:static \
+            --cache-from $GPR_CACHE_IMAGE:build \
+            --tag $GPR_CACHE_IMAGE:build \
+            --file ./Dockerfile \
+            # can't use BuildKit for GPR
+            "."
+      - name: Build stage image from Dockerfile
+        run: |
+          docker pull $GPR_CACHE_IMAGE:stage || true
+          docker build \
+            --cache-from $GPR_CACHE_IMAGE:build \
+            --cache-from $GPR_CACHE_IMAGE:stage \
+            --tag $GPR_CACHE_IMAGE:stage \
+            --file ./Dockerfile \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            # can't use BuildKit for GPR
+            "."
+      - name: Push static image to package registry
+        run: docker push $GPR_CACHE_IMAGE:static
+      - name: Push build image to package registry
+        run: docker push $GPR_CACHE_IMAGE:build
+      - name: Push stage image to package registry
+        run: docker push $GPR_CACHE_IMAGE:stage
   
   test:
     needs: build
@@ -99,7 +147,6 @@ jobs:
           python -m coverage run -m pytest --strict --postgresql-host postgres
           python -m coverage html
           python -m coverage report -m --fail-under 100
-          # TODO: use bin/tests
         env:
           # The hostname used to communicate with the PostgreSQL service container
           POSTGRES_HOST: postgres
@@ -227,4 +274,4 @@ jobs:
           npm install -D babel
 
       - name: Static Pipeline
-        run: bin/static_pipeline || bin/static_pipeline || bin/static_pipeline
+        run: bin/static_pipeline
