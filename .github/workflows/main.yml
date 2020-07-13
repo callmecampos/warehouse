@@ -6,10 +6,11 @@ env:
   CACHE_IMAGE: fmrcampos/docker-ci-cache
   GPR_CACHE_IMAGE: docker.pkg.github.com/${{ github.repository }}/docker-ci-cache
   DOCKER_BUILDKIT: 1
+  CACHE_SEED: 1
   NODE_VERSION: 14.4.0
 
 jobs:
-  build:
+  build-dh:
     name: Docker Hub Cache
     runs-on: ubuntu-latest
     steps:
@@ -90,7 +91,6 @@ jobs:
             --cache-from $GPR_CACHE_IMAGE:stage \
             --tag $GPR_CACHE_IMAGE:stage \
             --file ./Dockerfile \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
             # can't use BuildKit for GPR
             "."
       - name: Push static image to package registry
@@ -101,7 +101,7 @@ jobs:
         run: docker push $GPR_CACHE_IMAGE:stage
   
   test:
-    needs: build
+    needs: build-dh
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
     services:
@@ -116,6 +116,49 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v2
 
+      - name: Cache pip dependencies
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-pip-deps-dh
+        with:
+          path: ./.cache/pip
+          key: ${{ runner.os }}-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-
+            ${{ runner.os }}-${{ env.CACHE_SEED }}-${{ github.job }}-
+            ${{ runner.os }}-${{ env.CACHE_SEED }}-
+            ${{ runner.os }}-
+
+      - name: Cache node version manager
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-nvm-dh
+        with:
+          path: ~/.nvm/versions/
+          key: ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Cache node modules
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-npm-modules-dh
+        with:
+          path: |
+            ~/.npm
+            **/node_modules
+          key: ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
       - name: Install dependencies
         run: |
           apt-get update && apt-get -y install make locales build-essential curl libpq-dev autoconf
@@ -128,16 +171,21 @@ jobs:
           echo "LANG=en_US.UTF-8" > /etc/locale.conf
           locale-gen en_US.UTF-8
 
-      - name: Setup tests
+      - name: Install pip requirements
+        run: |
+          mkdir ./.cache && mkdir ./.cache/pip
+          chown -R $(whoami) ./.cache/pip
+          pip install -U pip setuptools wheel --cache-dir ./.cache/pip
+          pip install -r requirements.txt --cache-dir ./.cache/pip
+          pip install -r requirements/dev.txt --cache-dir ./.cache/pip
+          
+      - name: Setup node
         run: |
           curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.0/install.sh | bash
           export NVM_DIR="$HOME/.nvm" 
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
           nvm install $NODE_VERSION
-          pip install -U pip setuptools wheel
-          pip install -r requirements.txt
-          pip install -r requirements/dev.txt
           npm i -g npm
           npm install -g gulp-cli
           npm ci
@@ -154,7 +202,7 @@ jobs:
           POSTGRES_PORT: 5432
 
   lint:
-    needs: build
+    needs: build-dh
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
     steps:
@@ -171,7 +219,7 @@ jobs:
           make lint ACTIONS=true
 
   docs:
-    needs: build
+    needs: build-dh
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
     steps:
@@ -184,85 +232,100 @@ jobs:
           make docs
   
   deps:
-    needs: build
+    needs: build-dh
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
 
-      - name: Dependencies
+      - name: Cache pip dependencies
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-pip-deps-dh
+        with:
+          path: ./.cache/pip
+          key: ${{ runner.os }}-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-
+            ${{ runner.os }}-${{ env.CACHE_SEED }}-${{ github.job }}-
+            ${{ runner.os }}-${{ env.CACHE_SEED }}-
+            ${{ runner.os }}-
+
+      - name: Install dependencies
         run: |
           apt-get update && apt-get -y install build-essential make libpq-dev
           apt -y install libcurl4-openssl-dev libssl-dev pkg-config
-          pip install -U pip setuptools wheel
-          pip install -r requirements.txt
-          pip install -r requirements/dev.txt # this is probably happening twice
-          make deps
+          mkdir ./.cache && mkdir ./.cache/pip
+          chown -R $(whoami) ./.cache/pip
+          pip install -U pip setuptools wheel --cache-dir ./.cache/pip
+          pip install -r requirements.txt --cache-dir ./.cache/pip
+          pip install -r requirements/dev.txt --cache-dir ./.cache/pip
+
+      - name: Check dependencies
+        run: make deps
 
   licenses:
-    needs: build
+    needs: build-dh
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
 
-      - name: Licenses
+      - name: Check licenses
         run: bin/licenses
   
   translations:
-    needs: build
+    needs: build-dh
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:stage
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
 
-      - name: Translations
+      - name: Check translations
         run: |
           apt-get update && apt-get -y install make
           make translations
 
   static-lint:
-    needs: build
+    needs: build-dh
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:static
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
 
-      - name: Lint
+      - name: Static Lint Check
         run: |
           npm install eslint --save-dev
           ./node_modules/.bin/eslint 'warehouse/static/js/**' '**.js' 'tests/frontend/**' --ignore-pattern 'warehouse/static/js/vendor/**'
           ./node_modules/.bin/sass-lint --verbose
 
   static-tests:
-    needs: build
+    needs: build-dh
     runs-on: ubuntu-latest
     container: fmrcampos/docker-ci-cache:static
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
 
-      - name: Static Tests
-        run: |
-          apt-get update && apt-get -y install locales
-          echo "LC_ALL=en_US.UTF-8" >> /etc/environment
-          echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-          echo "LANG=en_US.UTF-8" > /etc/locale.conf
-          locale-gen en_US.UTF-8
-          npm install -D babel
-          bin/static_tests
-
-  static-pipeline:
-    needs: build
-    runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:static
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
+      - name: Cache node modules
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-node-modules-static-dh
+        with:
+          path: |
+            ~/.npm
+            **/node_modules
+          key: ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
 
       - name: Locale & Dependency Setup
         run: |
@@ -273,5 +336,55 @@ jobs:
           locale-gen en_US.UTF-8
           npm install -D babel
 
-      - name: Static Pipeline
+      - name: Static Tests
+        run: bin/static_tests
+
+  static-pipeline:
+    needs: build-dh
+    runs-on: ubuntu-latest
+    container: fmrcampos/docker-ci-cache:static
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v2
+
+      - name: Cache node version manager
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-nvm-pipeline-dh
+        with:
+          path: ~/.nvm/versions/
+          key: ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Cache node modules
+        uses: actions/cache@v2
+        env:
+          cache-name: cache-node-modules-static-dh
+        with:
+          path: |
+            ~/.npm
+            **/node_modules
+          key: ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-${{ env.cache-name }}-
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-${{ github.job }}-
+            ${{ runner.os }}-build-${{ env.CACHE_SEED }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
+      - name: Locale & Dependency Setup
+        run: |
+          apt-get update && apt-get -y install locales
+          echo "LC_ALL=en_US.UTF-8" >> /etc/environment
+          echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+          echo "LANG=en_US.UTF-8" > /etc/locale.conf
+          locale-gen en_US.UTF-8
+          npm install -D babel
+
+      - name: Static Pipeline Check
         run: bin/static_pipeline
