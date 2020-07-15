@@ -6,12 +6,12 @@ env:
   CACHE_IMAGE: fmrcampos/docker-ci-cache
   GPR_CACHE_IMAGE: docker.pkg.github.com/${{ github.repository }}/docker-ci-cache
   CACHE_SEED: 1
+  DOCKER_BUILDKIT: 1
   NODE_VERSION: 14.4.0
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:stage
     services:
       postgres:
         image: postgres:10.1
@@ -20,9 +20,23 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 5432:5432
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
+
+      - uses: whoan/docker-build-with-cache-action@master
+        with:
+          image_name: ${{ env.CACHE_IMAGE }}
+          image_tag: stage
+          build_extra_args: "--cache-from ${{ env.CACHE_IMAGE }}:static --cache-from ${{ env.CACHE_IMAGE }}:build --cache-from ${{ env.CACHE_IMAGE }}:stage --build-arg BUILDKIT_INLINE_CACHE=1"
+          push_image_and_stages: false
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
 
       - name: Cache pip dependencies
         uses: actions/cache@v2
@@ -68,16 +82,7 @@ jobs:
             ${{ runner.os }}-
 
       - name: Install dependencies
-        run: |
-          apt-get update && apt-get -y install make locales build-essential curl libpq-dev autoconf
-          apt -y install libcurl4-openssl-dev libssl-dev pkg-config
-
-      - name: Set locale
-        run: |
-          echo "LC_ALL=en_US.UTF-8" >> /etc/environment
-          echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-          echo "LANG=en_US.UTF-8" > /etc/locale.conf
-          locale-gen en_US.UTF-8
+        run: sudo apt -y install libcurl4-openssl-dev libssl-dev pkg-config
 
       - name: Install pip requirements
         run: |
@@ -100,21 +105,27 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m coverage run -m pytest --strict --postgresql-host postgres
+          python -m coverage run -m pytest --strict --postgresql-host localhost
           python -m coverage html
           python -m coverage report -m --fail-under 100
         env:
           # The hostname used to communicate with the PostgreSQL service container
-          POSTGRES_HOST: postgres
+          POSTGRES_HOST: localhost
           # The default PostgreSQL port
           POSTGRES_PORT: 5432
 
   lint:
     runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:stage
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
+
+      - uses: whoan/docker-build-with-cache-action@master
+        with:
+          image_name: ${{ env.CACHE_IMAGE }}
+          image_tag: stage
+          build_extra_args: "--cache-from ${{ env.CACHE_IMAGE }}:static --cache-from ${{ env.CACHE_IMAGE }}:build --cache-from ${{ env.CACHE_IMAGE }}:stage --build-arg BUILDKIT_INLINE_CACHE=1"
+          push_image_and_stages: false
 
       - uses: actions/setup-python@v2
         with:
@@ -122,27 +133,47 @@ jobs:
 
       - name: Lint
         run: |
-          apt-get update && apt-get install make
+          sudo apt-get update && sudo apt-get install make
           make lint ACTIONS=true
 
   docs:
     runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:stage
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
 
+      - uses: whoan/docker-build-with-cache-action@master
+        with:
+          image_name: ${{ env.CACHE_IMAGE }}
+          image_tag: stage
+          build_extra_args: "--cache-from ${{ env.CACHE_IMAGE }}:static --cache-from ${{ env.CACHE_IMAGE }}:build --cache-from ${{ env.CACHE_IMAGE }}:stage --build-arg BUILDKIT_INLINE_CACHE=1"
+          push_image_and_stages: false
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
       - name: Documentation
         run: |
-          apt-get update && apt-get install make
+          sudo apt-get update && sudo apt-get install make
           make docs
   
   deps:
     runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:stage
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
+
+      - uses: whoan/docker-build-with-cache-action@master
+        with:
+          image_name: ${{ env.CACHE_IMAGE }}
+          image_tag: stage
+          build_extra_args: "--cache-from ${{ env.CACHE_IMAGE }}:static --cache-from ${{ env.CACHE_IMAGE }}:build --cache-from ${{ env.CACHE_IMAGE }}:stage --build-arg BUILDKIT_INLINE_CACHE=1"
+          push_image_and_stages: false
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
 
       - name: Cache pip dependencies
         uses: actions/cache@v2
@@ -159,8 +190,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt-get update && apt-get -y install build-essential make libpq-dev
-          apt -y install libcurl4-openssl-dev libssl-dev pkg-config
+          sudo apt -y install libcurl4-openssl-dev libssl-dev pkg-config
           mkdir ./.cache && mkdir ./.cache/pip
           chown -R $(whoami) ./.cache/pip
           pip install -U pip setuptools wheel --cache-dir ./.cache/pip
@@ -172,32 +202,52 @@ jobs:
 
   licenses:
     runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:stage
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
+
+      - uses: whoan/docker-build-with-cache-action@master
+        with:
+          image_name: ${{ env.CACHE_IMAGE }}
+          image_tag: stage
+          build_extra_args: "--cache-from ${{ env.CACHE_IMAGE }}:static --cache-from ${{ env.CACHE_IMAGE }}:build --cache-from ${{ env.CACHE_IMAGE }}:stage --build-arg BUILDKIT_INLINE_CACHE=1"
+          push_image_and_stages: false
 
       - name: Check licenses
         run: bin/licenses
   
   translations:
     runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:stage
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
 
+      - uses: whoan/docker-build-with-cache-action@master
+        with:
+          image_name: ${{ env.CACHE_IMAGE }}
+          image_tag: stage
+          build_extra_args: "--cache-from ${{ env.CACHE_IMAGE }}:static --cache-from ${{ env.CACHE_IMAGE }}:build --cache-from ${{ env.CACHE_IMAGE }}:stage --build-arg BUILDKIT_INLINE_CACHE=1"
+          push_image_and_stages: false
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
       - name: Check translations
-        run: |
-          apt-get update && apt-get -y install make
-          make translations
+        run: make translations
 
   static-lint:
     runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:static
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
+
+      - uses: whoan/docker-build-with-cache-action@master
+        with:
+          image_name: ${{ env.CACHE_IMAGE }}
+          image_tag: static
+          build_extra_args: "--target static --cache-from ${{ env.CACHE_IMAGE }}:static --build-arg BUILDKIT_INLINE_CACHE=1"
+          push_image_and_stages: false
 
       - name: Static Lint Check
         run: |
@@ -207,10 +257,16 @@ jobs:
 
   static-tests:
     runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:static
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
+
+      - uses: whoan/docker-build-with-cache-action@master
+        with:
+          image_name: ${{ env.CACHE_IMAGE }}
+          image_tag: static
+          build_extra_args: "--target static --cache-from ${{ env.CACHE_IMAGE }}:static --build-arg BUILDKIT_INLINE_CACHE=1"
+          push_image_and_stages: false
 
       - name: Cache node modules
         uses: actions/cache@v2
@@ -228,24 +284,24 @@ jobs:
             ${{ runner.os }}-build-
             ${{ runner.os }}-
 
-      - name: Locale & Dependency Setup
-        run: |
-          apt-get update && apt-get -y install locales
-          echo "LC_ALL=en_US.UTF-8" >> /etc/environment
-          echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-          echo "LANG=en_US.UTF-8" > /etc/locale.conf
-          locale-gen en_US.UTF-8
-          npm install -D babel
+      - name: Dependency Setup
+        run: npm install -D babel
 
       - name: Static Tests
         run: bin/static_tests
 
   static-pipeline:
     runs-on: ubuntu-latest
-    container: fmrcampos/docker-ci-cache:static
     steps:
       - name: Check out repository
         uses: actions/checkout@v2
+
+      - uses: whoan/docker-build-with-cache-action@master
+        with:
+          image_name: ${{ env.CACHE_IMAGE }}
+          image_tag: static
+          build_extra_args: "--target static --cache-from ${{ env.CACHE_IMAGE }}:static --build-arg BUILDKIT_INLINE_CACHE=1"
+          push_image_and_stages: false
 
       - name: Cache node version manager
         uses: actions/cache@v2
@@ -277,14 +333,8 @@ jobs:
             ${{ runner.os }}-build-
             ${{ runner.os }}-
 
-      - name: Locale & Dependency Setup
-        run: |
-          apt-get update && apt-get -y install locales
-          echo "LC_ALL=en_US.UTF-8" >> /etc/environment
-          echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-          echo "LANG=en_US.UTF-8" > /etc/locale.conf
-          locale-gen en_US.UTF-8
-          npm install -D babel
+      - name: Dependency Setup
+        run: npm install -D babel
 
       - name: Static Pipeline Check
         run: bin/static_pipeline

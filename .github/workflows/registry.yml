@@ -10,7 +10,7 @@ env:
   GPR_CACHE_IMAGE: docker.pkg.github.com/${{ github.repository }}/docker-ci-cache
   DOCKER_BUILDKIT: 1
 
-update-cache:
+jobs:
   build-dh:
     name: Docker Hub Cache
     runs-on: ubuntu-latest
