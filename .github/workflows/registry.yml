@@ -1,0 +1,102 @@
+name: Registry Image Caching
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  CACHE_IMAGE: fmrcampos/docker-ci-cache
+  GPR_CACHE_IMAGE: docker.pkg.github.com/${{ github.repository }}/docker-ci-cache
+  DOCKER_BUILDKIT: 1
+
+update-cache:
+  build-dh:
+    name: Docker Hub Cache
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v1
+      - name: Log in to docker hub
+        run: echo ${{ secrets.REGISTRY_PASS }} | docker login -u ${{ secrets.REGISTRY_USER }} --password-stdin
+      - name: Build static from dockerfile
+        run: |
+          docker build \
+            --target static \
+            --cache-from $CACHE_IMAGE:static \
+            --tag $CACHE_IMAGE:static \
+            --file ./Dockerfile \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            "."
+      - name: Build build from dockerfile
+        run: |
+          docker build \
+            --target build \
+            --cache-from $CACHE_IMAGE:static \
+            --cache-from $CACHE_IMAGE:build \
+            --tag $CACHE_IMAGE:build \
+            --file ./Dockerfile \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            "."
+      - name: Build stage from dockerfile
+        run: |
+          docker build \
+            --cache-from $CACHE_IMAGE:build \
+            --cache-from $CACHE_IMAGE:stage \
+            --tag $CACHE_IMAGE:stage \
+            --file ./Dockerfile \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            "."
+      - name: Push static image to Docker Hub
+        run: docker push $CACHE_IMAGE:static
+      - name: Push build image to Docker Hub
+        run: docker push $CACHE_IMAGE:build
+      - name: Push stage image to Docker Hub
+        run: docker push $CACHE_IMAGE:stage
+
+  build-gpr:
+    if: false # https://github.community/t/docker-pull-from-public-github-package-registry-fail-with-no-basic-auth-credentials-error/16358
+    name: GitHub Package Registry Cache
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v1
+      - name: Log in to GitHub Package Registry
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u $GITHUB_ACTOR --password-stdin
+      - name: Build static image from Dockerfile
+        run: |
+          docker pull $GPR_CACHE_IMAGE:static || true
+          docker build \
+            --target static \
+            --cache-from $GPR_CACHE_IMAGE:static \
+            --tag $GPR_CACHE_IMAGE:static \
+            --file ./Dockerfile \
+            # can't use BuildKit for GPR
+            "."
+      - name: Build build image from Dockerfile
+        run: |
+          docker pull $GPR_CACHE_IMAGE:build || true
+          docker build \
+            --target build \
+            --cache-from $GPR_CACHE_IMAGE:static \
+            --cache-from $GPR_CACHE_IMAGE:build \
+            --tag $GPR_CACHE_IMAGE:build \
+            --file ./Dockerfile \
+            # can't use BuildKit for GPR
+            "."
+      - name: Build stage image from Dockerfile
+        run: |
+          docker pull $GPR_CACHE_IMAGE:stage || true
+          docker build \
+            --cache-from $GPR_CACHE_IMAGE:build \
+            --cache-from $GPR_CACHE_IMAGE:stage \
+            --tag $GPR_CACHE_IMAGE:stage \
+            --file ./Dockerfile \
+            # can't use BuildKit for GPR
+            "."
+      - name: Push static image to package registry
+        run: docker push $GPR_CACHE_IMAGE:static
+      - name: Push build image to package registry
+        run: docker push $GPR_CACHE_IMAGE:build
+      - name: Push stage image to package registry
+        run: docker push $GPR_CACHE_IMAGE:stage
