@@ -120,11 +120,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v2
 
+      - name: Pull multi-stage Docker images
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u $GITHUB_ACTOR --password-stdin
+          docker pull $GPR_CACHE_IMAGE:static
+          docker pull $GPR_CACHE_IMAGE:build
+          docker pull $GPR_CACHE_IMAGE:stage
+
       - uses: whoan/docker-build-with-cache-action@master
         with:
-          image_name: ${{ env.CACHE_IMAGE }}
+          registry: docker.pkg.github.com
+          image_name: ${{ env.GPR_CACHE_IMAGE }}
           image_tag: stage
-          build_extra_args: "--cache-from ${{ env.CACHE_IMAGE }}:static --cache-from ${{ env.CACHE_IMAGE }}:build --cache-from ${{ env.CACHE_IMAGE }}:stage --build-arg BUILDKIT_INLINE_CACHE=1"
+          build_extra_args: "--cache-from ${{ env.GPR_CACHE_IMAGE }}:static --cache-from ${{ env.GPR_CACHE_IMAGE }}:build --cache-from ${{ env.GPR_CACHE_IMAGE }}:stage"
           push_image_and_stages: false
 
       - uses: actions/setup-python@v2

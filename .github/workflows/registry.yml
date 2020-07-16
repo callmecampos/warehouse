@@ -3,7 +3,7 @@ name: Registry Image Caching
 on:
   push:
     branches:
-      - master
+      - github-actions-ci-master-cache
 
 env:
   CACHE_IMAGE: fmrcampos/docker-ci-cache
@@ -55,7 +55,6 @@ jobs:
         run: docker push $CACHE_IMAGE:stage
 
   build-gpr:
-    if: false # https://github.community/t/docker-pull-from-public-github-package-registry-fail-with-no-basic-auth-credentials-error/16358
     name: GitHub Package Registry Cache
     runs-on: ubuntu-latest
     steps:
@@ -65,34 +64,31 @@ jobs:
         run: echo ${{ secrets.GITHUB_TOKEN }} | docker login docker.pkg.github.com -u $GITHUB_ACTOR --password-stdin
       - name: Build static image from Dockerfile
         run: |
-          docker pull $GPR_CACHE_IMAGE:static || true
+          docker pull $GPR_CACHE_IMAGE:static
           docker build \
             --target static \
             --cache-from $GPR_CACHE_IMAGE:static \
             --tag $GPR_CACHE_IMAGE:static \
             --file ./Dockerfile \
-            # can't use BuildKit for GPR
             "."
       - name: Build build image from Dockerfile
         run: |
-          docker pull $GPR_CACHE_IMAGE:build || true
+          docker pull $GPR_CACHE_IMAGE:build
           docker build \
             --target build \
             --cache-from $GPR_CACHE_IMAGE:static \
             --cache-from $GPR_CACHE_IMAGE:build \
             --tag $GPR_CACHE_IMAGE:build \
             --file ./Dockerfile \
-            # can't use BuildKit for GPR
             "."
       - name: Build stage image from Dockerfile
         run: |
-          docker pull $GPR_CACHE_IMAGE:stage || true
+          docker pull $GPR_CACHE_IMAGE:stage
           docker build \
             --cache-from $GPR_CACHE_IMAGE:build \
             --cache-from $GPR_CACHE_IMAGE:stage \
             --tag $GPR_CACHE_IMAGE:stage \
             --file ./Dockerfile \
-            # can't use BuildKit for GPR
             "."
       - name: Push static image to package registry
         run: docker push $GPR_CACHE_IMAGE:static
